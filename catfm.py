@@ -184,6 +184,7 @@ class CatFMCogs(commands.Cog):
             )
         return await super().cog_app_command_error(interaction, error)
 
+    @commands.is_owner()
     @app_commands.command()
     async def sync(self: Self, interaction: discord.Interaction):
         await self.bot.remove_cog("CatFMCogs")
@@ -245,9 +246,11 @@ class CatFMCogs(commands.Cog):
                         )
                         return
                 song_path = self.bot.playable_songs[song_name][1]
-                game = discord.Game(song_name)
+                presence = discord.Game(song_name)
                 asyncio.run_coroutine_threadsafe(
-                    self.bot.change_presence(status=discord.Status.idle, activity=game),
+                    self.bot.change_presence(
+                        status=discord.Status.idle, activity=presence
+                    ),
                     self.bot.loop,
                 )
                 future = asyncio.run_coroutine_threadsafe(
@@ -269,8 +272,10 @@ class CatFMCogs(commands.Cog):
 
             song_name = next(self.bot.get_playlist_iter(session["playlist"]))
             song_path = self.bot.playable_songs[song_name][1]
-            game = discord.Game(song_name)
-            await self.bot.change_presence(status=discord.Status.idle, activity=game)
+            presence = discord.Game(song_name)
+            await self.bot.change_presence(
+                status=discord.Status.idle, activity=presence
+            )
             source = await discord.FFmpegOpusAudio.from_probe(str(song_path))
             try:
                 voice.play(source, after=wrap_play_next_song)
