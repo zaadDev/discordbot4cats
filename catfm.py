@@ -328,7 +328,7 @@ class CatFMCogs(commands.Cog):
             voice.play(source, after=wrap_disconnect)
         else:
             await interaction.response.send_message(
-                "Non sei in un canale vocale al momento"
+                "Non sei in un canale vocale al momento", ephemeral=True
             )
 
 
