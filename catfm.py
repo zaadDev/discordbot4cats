@@ -334,19 +334,31 @@ class CatFMCogs(commands.Cog):
 
 def configurate(configfp: str, assetsfp: str):
     global DEFAULT_CONF
+
+    # Crea nuovo file di configurazione se non esiste a partire da DEFULTCONF
     if not os.path.exists(configfp):
         with open(configfp, mode="x", encoding="utf8") as f:
             f.write(json.dumps(DEFAULT_CONF))
+
     if not os.path.isfile(configfp):
         raise FileNotFoundError(f"{configfp} file not Found or Not a file")
     if not os.access(configfp, os.R_OK):
         raise PermissionError(f"{configfp} file not Readable.")
     with open(configfp, mode="r", encoding="utf8") as f:
-        conf = json.load(f)
+        try:
+            conf = json.load(f)
+        except json.decoder.JSONDecodeError as error:
+            raise json.decoder.JSONDecodeError(
+                msg=f"Il file di configuarazione {configfp} ha errori di sintassi (json)",
+                doc=error.doc,
+                pos=error.pos,
+            ) from error
 
     if conf:
         # TODO: Should checks assets too add if missing trailing '/'
         conf["assets"] = assetsfp
+    else:
+        raise TypeError(f"Config {configfp}")
     # TODO: Validate conf...
     return conf
 
