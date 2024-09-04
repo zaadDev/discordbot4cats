@@ -60,7 +60,7 @@ catfmlog.setLevel(logging.DEBUG)
 discord.utils.setup_logging(level=logging.DEBUG)
 
 
-class confDict(TypedDict):
+class FileConfDict(TypedDict):
     """TypedDict for default conf file. That's useful for type Hinting."""
 
     token: str
@@ -69,19 +69,26 @@ class confDict(TypedDict):
     assets: str
 
 
+class CatFMConf(FileConfDict):
+    """TypedDict for storing bot configuration settings derived from FileConfDict."""
+
+    sync: bool
+
+
 # Globals&Defaults
 CONFIG_FILE: str = "catFm.conf.json"
 ASSETS_FOLD: str = "./assets/"
-DEFAULT_CONF: confDict = {
+DEFAULT_CONF: FileConfDict = {
     "token": "",
     "guilds": list(),
     "fm_channel": int(),
     "assets": "./assets/",
 }
+DEFAULT_BOT_CONF: CatFMConf = {**DEFAULT_CONF, "sync": False}
 
 
 class CatFM(commands.bot.Bot):
-    def __init__(self: Self, conf: confDict, *args, **kwargs) -> None:
+    def __init__(self: Self, conf: CatFMConf, *args, **kwargs) -> None:
         super().__init__(
             command_prefix=commands.when_mentioned,
             intents=discord.Intents.default(),
@@ -91,15 +98,19 @@ class CatFM(commands.bot.Bot):
         if conf is None:
             raise TypeError("Conf can't be None")
         self.init = False
+        self.guild_sessions = dict()
         self.conf = conf
+        self.do_sync = conf["sync"]
         self.songs_sfolders_path = Path(self.conf["assets"] + "songs/")
         self.playable_songs = None
-        self.guild_sessions = dict()
 
     async def setup_hook(self: Self) -> None:
         await self.add_cog(CatFMCogs(self))
         self.playable_songs = self.get_songs()
-        # await self.tree.sync()
+        if self.do_sync:
+            catfmlog.debug("Syncronizzazione comandi")
+            await self.tree.sync()
+            self.do_sync = False
         return
 
     # TODO: Handle failures
@@ -273,7 +284,7 @@ class CatFMCogs(commands.Cog):
                 try:
                     source = future.result()
                 except Exception as exc:
-                    catfmlog.debug(f"Errore probing {song_path}\n\t\t`> {exc}")
+                    catfmlog.debug(f"Errore probing file: {song_path}\n\t\t`> {exc}")
                 else:
                     # No Errors Raised... I guess
                     try:
@@ -332,7 +343,9 @@ class CatFMCogs(commands.Cog):
             )
 
 
-def configurate(configfp: str, assetsfp: str):
+def configurate(args: argparse.Namespace) -> CatFMConf:
+    configfp: str = args.config if args.config else CONFIG_FILE
+    assetsfp: str = args.assets if args.assets else ASSETS_FOLD
     global DEFAULT_CONF
 
     # Crea nuovo file di configurazione se non esiste a partire da DEFULTCONF
@@ -349,7 +362,7 @@ def configurate(configfp: str, assetsfp: str):
             conf = json.load(f)
         except json.decoder.JSONDecodeError as error:
             raise json.decoder.JSONDecodeError(
-                msg=f"Il file di configuarazione {configfp} ha errori di sintassi (json)",
+                msg=f"Il file di configurazione {configfp} ha errori di sintassi (json)",
                 doc=error.doc,
                 pos=error.pos,
             ) from error
@@ -357,13 +370,14 @@ def configurate(configfp: str, assetsfp: str):
     if conf:
         # TODO: Should checks assets too add if missing trailing '/'
         conf["assets"] = assetsfp
+        conf["sync"] = args.sync if args.sync else DEFAULT_BOT_CONF["sync"]
     else:
         raise TypeError(f"Config {configfp}")
     # TODO: Validate conf...
     return conf
 
 
-def parser_setup():
+def parser_setup(argv: list[str]):
     cli_parser = argparse.ArgumentParser(
         prog="catfm.py", description="Discord Bot for Cats"
     )
@@ -381,13 +395,19 @@ def parser_setup():
         metavar="<./assets/>",
         help=f"folder containing opus encoded sounds, supports subfolders. Overrides the config.json. Defaults to {ASSETS_FOLD}",
     )
-    args = cli_parser.parse_args(sys.argv[1:])
+    cli_parser.add_argument(
+        "--sync",
+        default=False,
+        action="store_true",
+        help="Syncs bots commands on startup. This is meant to be used only once abusing it may result in Discord Rate Limiting your bot",
+    )
+    args = cli_parser.parse_args(argv)
     return args
 
 
 if __name__ == "__main__":
-    args = parser_setup()
-    catfmlog.debug(f"cli args {args}")
-    conf = configurate(args.config, args.assets)
+    args = parser_setup(sys.argv[1:])
+    catfmlog.debug(f"Cli args {args}")
+    conf = configurate(args)
     client = CatFM(conf)
     client.run(conf["token"], log_handler=None)
