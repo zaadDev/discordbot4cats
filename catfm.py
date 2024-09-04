@@ -59,17 +59,25 @@ catfmlog = logging.getLogger("discord.catfm")
 catfmlog.setLevel(logging.DEBUG)
 discord.utils.setup_logging(level=logging.DEBUG)
 
+
 class confDict(TypedDict):
-    """ TypedDict for default conf file. That's useful for type Hinting."""
+    """TypedDict for default conf file. That's useful for type Hinting."""
+
     token: str
     guilds: list[int]
     fm_channel: int
     assets: str
 
+
 # Globals&Defaults
 CONFIG_FILE: str = "catFm.conf.json"
 ASSETS_FOLD: str = "./assets/"
-DEFAULT_CONF: confDict = {"token": "", "guilds": list(), "fm_channel": int(), "assets": "./assets/"}
+DEFAULT_CONF: confDict = {
+    "token": "",
+    "guilds": list(),
+    "fm_channel": int(),
+    "assets": "./assets/",
+}
 
 
 class CatFM(commands.bot.Bot):
@@ -335,11 +343,11 @@ def configurate(configfp: str, assetsfp: str):
         raise PermissionError(f"{configfp} file not Readable.")
     with open(configfp, mode="r", encoding="utf8") as f:
         conf = json.load(f)
-    
+
     if conf:
         # TODO: Should checks assets too add if missing trailing '/'
         conf["assets"] = assetsfp
-    # TODO: Validate conf... 
+    # TODO: Validate conf...
     return conf
 
 
