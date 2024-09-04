@@ -48,7 +48,7 @@ import os
 import random
 import sys
 from pathlib import Path
-from typing import Self
+from typing import Self, TypedDict
 
 import discord
 from discord import app_commands
@@ -59,15 +59,21 @@ catfmlog = logging.getLogger("discord.catfm")
 catfmlog.setLevel(logging.DEBUG)
 discord.utils.setup_logging(level=logging.DEBUG)
 
+class confDict(TypedDict):
+    """ TypedDict for default conf file. That's useful for type Hinting."""
+    token: str
+    guilds: list[int]
+    fm_channel: int
+    assets: str
+
 # Globals&Defaults
 CONFIG_FILE: str = "catFm.conf.json"
 ASSETS_FOLD: str = "./assets/"
-# TODO: TypedDict for CONF to clear TypeErrors on keys values
-CONF: dict = {"token": "", "guilds": list(), "fm_channel": "", "assets": "./assets/"}
+DEFAULT_CONF: confDict = {"token": "", "guilds": list(), "fm_channel": int(), "assets": "./assets/"}
 
 
 class CatFM(commands.bot.Bot):
-    def __init__(self: Self, conf: dict[str, str], *args, **kwargs) -> None:
+    def __init__(self: Self, conf: confDict, *args, **kwargs) -> None:
         super().__init__(
             command_prefix=commands.when_mentioned,
             intents=discord.Intents.default(),
@@ -159,7 +165,7 @@ class CatFM(commands.bot.Bot):
 
 class CatFMCogs(commands.Cog):
     class BusyCheckFailure(app_commands.AppCommandError):
-        """Exception for ensure_not_busy"""
+        """Exception for ensure_bot_not_busy"""
 
         # TODO: Specificare cos'è qualcos'altro
         def __init__(self):
@@ -197,7 +203,7 @@ class CatFMCogs(commands.Cog):
     # TODO: Traccia cosa sta attualmente facendo il bot per gilda
     # TODO: Attualmente è busy se sta in un qualsiasi canale vocale, che non è la cosa richiesta
     @staticmethod
-    async def ensure_not_busy(interaction: discord.Interaction) -> bool:
+    async def ensure_bot_not_busy(interaction: discord.Interaction) -> bool:
         if interaction.guild and isinstance(
             interaction.guild.voice_client, discord.VoiceProtocol
         ):
@@ -208,7 +214,8 @@ class CatFMCogs(commands.Cog):
             else False
         )
 
-    @app_commands.check(ensure_not_busy)
+    # TODO: this need to be refactored for cleanups and reduce duplicate code
+    @app_commands.check(ensure_bot_not_busy)
     @app_commands.guild_only()
     @app_commands.command()
     async def join(self: Self, interaction: discord.Interaction):
@@ -231,7 +238,6 @@ class CatFMCogs(commands.Cog):
                 # That's why: https://discordpy.readthedocs.io/en/stable/faq.html#how-do-i-pass-a-coroutine-to-the-player-s-after-function
                 if error:
                     print(f"Errore player {error}")
-
                 try:
                     song_name = next(self.bot.get_playlist_iter(session["playlist"]))
                 except StopIteration:
@@ -252,9 +258,6 @@ class CatFMCogs(commands.Cog):
                         status=discord.Status.idle, activity=presence
                     ),
                     self.bot.loop,
-                )
-                future = asyncio.run_coroutine_threadsafe(
-                    discord.FFmpegOpusAudio.from_probe(song_path), self.bot.loop
                 )
                 future = asyncio.run_coroutine_threadsafe(
                     discord.FFmpegOpusAudio.from_probe(song_path), self.bot.loop
@@ -286,7 +289,7 @@ class CatFMCogs(commands.Cog):
                 "Non sei in un canale vocale al momento"
             )
 
-    @app_commands.check(ensure_not_busy)
+    @app_commands.check(ensure_bot_not_busy)
     @app_commands.guild_only()
     @app_commands.command()
     async def air_horn(self: Self, interaction: discord.Interaction):
@@ -322,21 +325,22 @@ class CatFMCogs(commands.Cog):
 
 
 def configurate(configfp: str, assetsfp: str):
-    global CONF
+    global DEFAULT_CONF
     if not os.path.exists(configfp):
         with open(configfp, mode="x", encoding="utf8") as f:
-            f.write(json.dumps(CONF))
+            f.write(json.dumps(DEFAULT_CONF))
     if not os.path.isfile(configfp):
         raise FileNotFoundError(f"{configfp} file not Found or Not a file")
     if not os.access(configfp, os.R_OK):
         raise PermissionError(f"{configfp} file not Readable.")
     with open(configfp, mode="r", encoding="utf8") as f:
         conf = json.load(f)
-    # TODO: Should checks assets too add if missing trailing '/'
-    conf["assets"] = assetsfp
-    # TODO: Validate conf... (? Is it really needed?)
-    CONF = conf if conf else dict()
-    return CONF
+    
+    if conf:
+        # TODO: Should checks assets too add if missing trailing '/'
+        conf["assets"] = assetsfp
+    # TODO: Validate conf... 
+    return conf
 
 
 def parser_setup():
